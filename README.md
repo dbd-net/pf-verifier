@@ -18,7 +18,8 @@ The whole algorithm is in [`verify.js`](verify.js).
    (Skipping larger numbers keeps every ticket exactly equally likely. It happens about once in
    4,400 spins. If all 8 numbers in the output are skipped, compute the HMAC again with `:1` at
    the end instead of `:0`, and so on.)
-4. Each item in the pack owns a range of tickets. The range your ticket falls in is your item.
+4. Each item in the pack owns a range of tickets. The range your ticket falls in is your item;
+   the round's proof page on happyending.com shows that range.
 
 ## Check it with any tool
 
