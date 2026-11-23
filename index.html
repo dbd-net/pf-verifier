@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Provably fair verifier</title>
+<style>
+  :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #5c5c5c; --bg: #fafafa; --card: #fff; --line: #ddd; --ok: #1a7f37; --bad: #c62828; }
+  @media (prefers-color-scheme: dark) { :root { --fg: #eee; --muted: #a0a0a0; --bg: #111; --card: #1b1b1b; --line: #333; --ok: #4ac26b; --bad: #ff6b6b; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+  main { max-width: 44rem; margin: 0 auto; padding: 2rem 1rem; }
+  h1 { font-size: 1.5rem; margin: 0 0 .5rem; }
+  p { color: var(--muted); }
+  form, section { background: var(--card); border: 1px solid var(--line); border-radius: .5rem; padding: 1rem; margin: 1rem 0; }
+  label { display: block; font-size: .875rem; color: var(--muted); margin-top: .75rem; }
+  input { width: 100%; padding: .5rem; font: .875rem ui-monospace, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: .25rem; }
+  button { margin-top: 1rem; padding: .5rem 1.25rem; font: inherit; border-radius: .25rem; border: 1px solid var(--line); background: var(--fg); color: var(--bg); cursor: pointer; }
+  dt { font-size: .875rem; color: var(--muted); margin-top: .5rem; }
+  dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+  .ok { color: var(--ok); } .bad { color: var(--bad); }
+  .ticket { font-size: 1.75rem; font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Provably fair verifier</h1>
+  <p>Check a happyending.com pack opening yourself. Paste the values from the round's proof page.
+     Everything runs in your browser: nothing you enter is sent anywhere.</p>
+
+  <form id="form">
+    <label for="serverSeed">Server seed (revealed after you rotate your seed pair)</label>
+    <input id="serverSeed" name="serverSeed" autocomplete="off" spellcheck="false" required>
+    <label for="serverSeedHash">Server seed hash (shown before you played)</label>
+    <input id="serverSeedHash" name="serverSeedHash" autocomplete="off" spellcheck="false">
+    <label for="clientSeed">Client seed</label>
+    <input id="clientSeed" name="clientSeed" autocomplete="off" spellcheck="false" required>
+    <label for="nonce">Nonce</label>
+    <input id="nonce" name="nonce" inputmode="numeric" pattern="[0-9]+" required>
+    <button type="submit">Verify</button>
+  </form>
+
+  <section id="out" hidden aria-live="polite">
+    <dl>
+      <dt>1. SHA-256 of the server seed</dt><dd id="hash"></dd>
+      <dd id="hashVerdict"></dd>
+      <dt>2. HMAC-SHA256 message (the server seed is the key)</dt><dd id="message"></dd>
+      <dt>HMAC-SHA256 output</dt><dd id="hmac"></dd>
+      <dt>3. Ticket (1 to 1,000,000)</dt><dd id="ticket" class="ticket"></dd>
+    </dl>
+    <p>Match the ticket against the pack's ticket ranges on the proof page to see which item it wins.</p>
+  </section>
+
+  <p>Read the code: <a href="https://github.com/dbd-net/pf-verifier/blob/main/verify.js">verify.js</a> (about 40 lines).
+     Prefer your own tools? The <a href="https://github.com/dbd-net/pf-verifier#check-it-with-any-tool">README</a>
+     shows how to do the same check with any SHA-256 and HMAC calculator.</p>
+</main>
+<script type="module">
+  import { computeTicket, sha256Hex } from './verify.js'
+  const form = document.getElementById('form')
+  const $ = (id) => document.getElementById(id)
+
+  // Values arrive in the fragment (#serverSeed=...), which browsers never send to the server.
+  const params = new URLSearchParams(location.hash.slice(1))
+  for (const name of ['serverSeed', 'serverSeedHash', 'clientSeed', 'nonce']) {
+    if (params.has(name)) form.elements[name].value = params.get(name)
+  }
+
+  async function verify() {
+    const serverSeed = form.elements.serverSeed.value.trim()
+    const serverSeedHash = form.elements.serverSeedHash.value.trim().toLowerCase()
+    const clientSeed = form.elements.clientSeed.value.trim()
+    const nonce = Number(form.elements.nonce.value.trim())
+    const hash = await sha256Hex(serverSeed)
+    $('hash').textContent = hash
+    $('hashVerdict').textContent = serverSeedHash === '' ? 'No hash entered to compare.'
+      : hash === serverSeedHash ? '✓ Matches the hash shown before play' : '✗ Does not match the hash you entered'
+    $('hashVerdict').className = serverSeedHash === '' ? '' : hash === serverSeedHash ? 'ok' : 'bad'
+    const result = await computeTicket({ serverSeed, clientSeed, nonce })
+    $('message').textContent = result.message
+    $('hmac').textContent = result.hmacHex
+    $('ticket').textContent = result.ticket.toLocaleString('en-US')
+    $('out').hidden = false
+  }
+
+  form.addEventListener('submit', (event) => { event.preventDefault(); if (form.reportValidity()) verify() })
+  if (form.checkValidity()) verify()
+</script>
+</body>
+</html>
